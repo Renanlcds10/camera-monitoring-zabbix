@@ -1,27 +1,27 @@
 # Monitoramento de Câmeras IP com Zabbix, Python e Telegram
 
-Projeto desenvolvido para centralizar o monitoramento das câmeras IP de uma infraestrutura que possui atualmente **178 câmeras**, distribuídas entre diferentes servidores/grupos.
+Projeto desenvolvido para centralizar o monitoramento de uma infraestrutura com **178 câmeras IP**, utilizando **Zabbix**, automações em **Python** e alertas via **Telegram**.
 
-O objetivo foi facilitar a identificação de câmeras offline ou com problema de comunicação, evitando a necessidade de verificar manualmente cada equipamento no sistema de CFTV.
-
-Para isso utilizei **Zabbix**, automações em **Python** e integração com **Telegram** para envio dos alertas para a equipe técnica.
+A ideia surgiu da necessidade de identificar de forma mais rápida câmeras offline ou com problemas de comunicação, sem depender da verificação manual de cada equipamento no sistema de CFTV.
 
 ## O problema
 
-O ambiente possui uma quantidade grande de câmeras IP e verificar manualmente se cada câmera estava funcionando acabava sendo trabalhoso.
+Com uma quantidade grande de câmeras IP, verificar manualmente se cada equipamento estava funcionando acabava sendo trabalhoso.
 
-Além disso, uma câmera podia responder na rede, mas o serviço utilizado pelo sistema de monitoramento de vídeo não estar disponível.
+Além disso, somente o ping não era suficiente. Em alguns casos a câmera continuava respondendo na rede, mas o serviço utilizado pelo sistema de monitoramento de vídeo não estava disponível.
 
-Por isso decidi monitorar dois pontos diferentes:
+Por isso, o monitoramento foi dividido em dois pontos:
 
-- comunicação com o equipamento através de ICMP (ping);
-- disponibilidade do serviço através de uma conexão TCP na porta utilizada pela câmera.
+- **ICMP (ping):** verifica se o equipamento está acessível na rede;
+- **TCP:** verifica se o serviço da câmera está respondendo na porta configurada.
 
-Dessa forma consigo diferenciar uma câmera totalmente offline de uma câmera que ainda está na rede, mas está com problema no serviço TCP.
+Assim consigo diferenciar uma câmera completamente offline de uma câmera que ainda responde na rede, mas está com problema no serviço TCP.
+
+---
 
 ## Como ficou o monitoramento
 
-Atualmente o projeto monitora **178 câmeras IP**, separadas em 5 grupos:
+Atualmente são monitoradas **178 câmeras IP**, separadas em 5 grupos:
 
 | Grupo | Quantidade |
 |------|-----------:|
@@ -32,19 +32,27 @@ Atualmente o projeto monitora **178 câmeras IP**, separadas em 5 grupos:
 | CAM-15 | 28 |
 | **Total** | **178** |
 
-Cada câmera possui monitoramento de:
+Cada câmera possui monitoramento de ICMP e TCP, além de tags e grupos para facilitar a organização dentro do Zabbix.
 
-- ICMP;
-- porta TCP;
-- status ONLINE/OFFLINE;
-- grupo/servidor responsável;
-- tags para organização dentro do Zabbix.
+Alguns equipamentos utilizam portas TCP diferentes, então a porta pode ser configurada individualmente através de uma macro no host.
 
-Algumas câmeras utilizam portas TCP diferentes, então a porta é configurada individualmente através de uma macro no host.
+### Hosts no Zabbix
+
+As câmeras são organizadas em grupos e recebem os templates, tags e configurações necessárias para o monitoramento.
+
+![Hosts monitorados no Zabbix](docs/images/hosts.png)
+
+### Verificação ICMP e TCP
+
+Nos dados mais recentes é possível acompanhar separadamente a disponibilidade da câmera na rede e do serviço TCP.
+
+![Dados de monitoramento ICMP e TCP](docs/images/latest-data.png)
+
+---
 
 ## Arquitetura
 
-O funcionamento ficou basicamente assim:
+O funcionamento do projeto ficou basicamente assim:
 
 ```text
                   +------------------+
@@ -84,9 +92,11 @@ O funcionamento ficou basicamente assim:
                    Zabbix
 ```
 
+---
+
 ## Automações em Python
 
-Como eram muitas câmeras para cadastrar manualmente, utilizei Python para automatizar parte do processo através da API do Zabbix.
+Como eram muitas câmeras para cadastrar manualmente, utilizei Python para automatizar parte do processo através da **API do Zabbix**.
 
 Os scripts deste repositório representam essa parte do projeto.
 
@@ -94,56 +104,72 @@ Os scripts deste repositório representam essa parte do projeto.
 
 Responsável pela criação dos hosts no Zabbix a partir de uma planilha Excel.
 
-Antes de criar cada host o script verifica se já existe:
+Antes de criar cada host, o script verifica se já existe:
 
 - uma câmera com o mesmo nome;
 - uma câmera utilizando o mesmo IP.
 
-Na criação são configurados automaticamente:
+Durante a criação são configurados automaticamente:
 
 - grupo;
 - templates;
-- interface/IP;
+- interface e IP;
 - tags;
 - macro com a porta TCP.
 
-Antes da importação real o script também exige uma confirmação manual digitando `IMPORTAR`.
+Antes de iniciar a importação real, o script ainda exige uma confirmação manual digitando:
+
+```text
+IMPORTAR
+```
+
+Isso evita iniciar uma criação em massa por engano.
 
 ### `dry_run.py`
 
-Criei esse script para validar a planilha antes de fazer qualquer alteração no Zabbix.
+Antes da importação real, utilizei um **dry run** para validar os dados da planilha.
 
-Ele consulta os hosts existentes e mostra:
+O script consulta o Zabbix e informa:
 
 - quais câmeras seriam criadas;
 - quais já existem;
 - possíveis conflitos de IP.
 
-No final apresenta um resumo e **não cria ou altera nenhum host**.
-
-Foi uma forma de conferir os dados antes de executar a importação real.
+No final é apresentado um resumo da validação e **nenhum host é criado ou alterado**.
 
 ### `audit_cameras.py`
 
-Depois do cadastro das câmeras, criei também um script para consultar o estado dos equipamentos através da API do Zabbix.
+Depois do cadastro, também criei um script para consultar o estado das câmeras através da API do Zabbix.
 
-A auditoria verifica o último resultado do ICMP e TCP e classifica cada câmera como:
+A auditoria utiliza os últimos resultados de ICMP e TCP para classificar cada equipamento:
 
 | Status | Situação |
 |--------|----------|
 | `OK` | ICMP e TCP funcionando |
-| `TCP_FALHA` | responde ping, mas a porta TCP não responde |
+| `TCP_FALHA` | responde ao ping, mas o serviço TCP não responde |
 | `OFFLINE` | ICMP e TCP indisponíveis |
 | `ESTRANHO` | TCP responde mesmo sem resposta ICMP |
 | `SEM_DADOS` | ainda não existem dados suficientes |
 
-No final o script apresenta um resumo por grupo, um resumo geral e lista somente as câmeras que precisam de atenção.
+No final são exibidos um resumo por grupo, um resumo geral e a relação das câmeras que precisam de atenção.
+
+---
+
+## Detecção de problemas
+
+Os triggers do Zabbix identificam tanto problemas de conectividade quanto falhas no serviço TCP.
+
+Dessa forma, uma indisponibilidade pode ser identificada pelo ICMP, pelo serviço da câmera ou pelos dois testes.
+
+![Problemas detectados no Zabbix](docs/images/problems.png)
+
+---
 
 ## Alertas pelo Telegram
 
-Também configurei o Zabbix para enviar notificações para um grupo no Telegram utilizado pela equipe técnica.
+Também configurei o Zabbix para enviar automaticamente as notificações para um grupo no Telegram utilizado pela equipe técnica.
 
-Quando uma câmera fica indisponível, é enviado um alerta contendo informações como:
+Quando uma câmera fica indisponível, o grupo recebe um alerta no formato:
 
 ```text
 🚨 CÂMERA OFFLINE
@@ -156,7 +182,7 @@ Quando uma câmera fica indisponível, é enviado um alerta contendo informaçõ
 📅 Data: data
 ```
 
-Quando a comunicação é restabelecida, também é enviado automaticamente um alerta de recuperação:
+Quando a comunicação é restabelecida, também é enviada uma notificação de recuperação:
 
 ```text
 ✅ CÂMERA ONLINE
@@ -170,32 +196,46 @@ Quando a comunicação é restabelecida, também é enviado automaticamente um a
 📅 Data: data
 ```
 
-Dessa forma, a equipe técnica recebe tanto a identificação da indisponibilidade quanto a confirmação de que a câmera voltou a funcionar, sem precisar acompanhar constantemente a tela do Zabbix.
+Assim, a equipe recebe tanto a identificação da falha quanto a confirmação de que o equipamento voltou a funcionar.
+
+![Alertas de câmera no Telegram](docs/images/telegram-alerts.png)
+
+---
 
 ## Tecnologias utilizadas
 
-- Zabbix
-- Python 3
-- Zabbix API / JSON-RPC
-- Requests
-- OpenPyXL
-- Telegram Bot API
-- ICMP
-- TCP/IP
-- Excel
+- **Zabbix** — monitoramento, items, triggers e alertas;
+- **Python 3** — automação e auditoria;
+- **Zabbix API / JSON-RPC** — integração dos scripts com o Zabbix;
+- **Requests** — requisições HTTP para a API;
+- **OpenPyXL** — leitura das planilhas Excel;
+- **Telegram Bot API** — envio das notificações;
+- **ICMP e TCP/IP** — verificações de disponibilidade e comunicação.
+
+---
 
 ## Estrutura do repositório
 
 ```text
 camera-monitoring-zabbix/
-├── README.md
-├── requirements.txt
+├── docs/
+│   └── images/
+│       ├── hosts.png
+│       ├── latest-data.png
+│       ├── problems.png
+│       └── telegram-alerts.png
+│
+├── scripts/
+│   ├── import_cameras.py
+│   ├── dry_run.py
+│   └── audit_cameras.py
+│
 ├── .gitignore
-└── scripts/
-    ├── import_cameras.py
-    ├── dry_run.py
-    └── audit_cameras.py
+├── README.md
+└── requirements.txt
 ```
+
+---
 
 ## Executando os scripts
 
@@ -211,7 +251,7 @@ Configure o endereço da API:
 export ZABBIX_URL="https://zabbix.example.com/api_jsonrpc.php"
 ```
 
-O token da API é utilizado através de variável de ambiente e não fica salvo dentro dos scripts:
+O token é utilizado através de variável de ambiente e não fica salvo dentro dos scripts:
 
 ```bash
 read -s ZABBIX_TOKEN
@@ -219,8 +259,6 @@ export ZABBIX_TOKEN
 ```
 
 ### Dry Run
-
-Exemplo:
 
 ```bash
 python scripts/dry_run.py \
@@ -230,8 +268,6 @@ python scripts/dry_run.py \
 ```
 
 ### Importação
-
-Exemplo:
 
 ```bash
 python scripts/import_cameras.py \
@@ -257,24 +293,28 @@ Depois:
 python scripts/audit_cameras.py
 ```
 
+---
+
 ## Segurança
 
-Como este repositório é público, alguns dados utilizados no ambiente real não estão presentes aqui.
+Como este repositório é público, informações específicas do ambiente real foram removidas ou substituídas.
 
-Foram removidos ou substituídos:
+Entre elas:
 
 - IPs internos;
-- token da API;
+- tokens e credenciais;
 - IDs reais de grupos e templates;
 - caminhos internos do servidor;
-- informações específicas da infraestrutura.
+- nomes e informações específicas da infraestrutura.
 
 Os scripts publicados aqui foram adaptados a partir dos scripts utilizados durante a implantação real.
 
+---
+
 ## Resultado
 
-Com o projeto foi possível centralizar o acompanhamento das **178 câmeras IP** no Zabbix e automatizar boa parte do processo de cadastro e verificação.
+Ao final da implantação, ficaram **178 câmeras IP monitoradas**, divididas em 5 grupos.
 
-Além do monitoramento, os alertas pelo Telegram ajudam a equipe técnica a identificar rapidamente quando uma câmera fica offline e também quando ela volta a funcionar.
+Além do monitoramento ICMP e TCP, parte do processo de cadastro e auditoria foi automatizada com Python e os alertas de indisponibilidade e recuperação passaram a ser enviados automaticamente para a equipe técnica pelo Telegram.
 
-O projeto também acabou sendo uma oportunidade de trabalhar na prática com **monitoramento de infraestrutura, redes, Python, APIs e automação**.
+O projeto me permitiu trabalhar na prática com **monitoramento de infraestrutura, redes, Linux, Python, APIs e automação**, além de resolver um problema real do dia a dia da equipe de TI.
