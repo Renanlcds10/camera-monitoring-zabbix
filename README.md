@@ -1,11 +1,10 @@
-# Camera Monitoring with Zabbix, Grafana and Telegram
+# Camera Monitoring with Zabbix, Python and Telegram
 
-Projeto de monitoramento de câmeras IP usando **Zabbix**, **Grafana**, **Python** e **Telegram Bot API**.
+Projeto de monitoramento de câmeras IP usando **Zabbix**, **Python automation** e **Telegram Bot API**.
 
 ## Recursos
 - Monitoramento ICMP e TCP
 - Alertas OFFLINE/ONLINE via Telegram
-- Dashboard no Grafana
 - Cadastro em massa via Python + Zabbix API
 - Importação por Excel
 - Prevenção de duplicidade por nome/IP
