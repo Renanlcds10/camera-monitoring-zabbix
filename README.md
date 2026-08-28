@@ -156,9 +156,21 @@ Quando uma câmera fica indisponível, é enviado um alerta contendo informaçõ
 📅 Data: data
 ```
 
-Quando a comunicação volta, o Zabbix envia outra notificação informando que a câmera está online novamente.
+Quando a comunicação é restabelecida, também é enviado automaticamente um alerta de recuperação:
 
-Isso permite que a equipe seja avisada sem precisar ficar acompanhando constantemente a tela do Zabbix.
+```text
+✅ CÂMERA ONLINE
+
+📹 Nome da câmera
+🌐 IP: xxx.xxx.xxx.xxx
+
+🟢 Status: ONLINE
+⏱ Ficou offline por: duração
+🕐 Recuperado: horário
+📅 Data: data
+```
+
+Dessa forma, a equipe técnica recebe tanto a identificação da indisponibilidade quanto a confirmação de que a câmera voltou a funcionar, sem precisar acompanhar constantemente a tela do Zabbix.
 
 ## Tecnologias utilizadas
 
